@@ -570,6 +570,44 @@ video {
   .player-section.mini video { height: 130px; }
 }
 
+/* ── TV / Custom Fullscreen ── */
+.player-card.fullscreen-mode {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  border-radius: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  border: none;
+}
+.player-card.fullscreen-mode video {
+  height: calc(100vh - 50px);
+  object-fit: contain;
+  border-radius: 0;
+}
+
+/* Native fullscreen */
+video:fullscreen          { width:100vw; height:100vh; object-fit:contain; border-radius:0; }
+video:-webkit-full-screen { width:100vw; height:100vh; object-fit:contain; border-radius:0; }
+
+.fullscreen-btn {
+  margin-left: auto;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  color: #fff;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.fullscreen-btn:hover { background: rgba(255,255,255,0.18); }
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -654,6 +692,11 @@ video {
     <div class="player-bar">
       <span class="live-badge" id="liveBadge" style="display:none;">● LIVE</span>
       <div id="nowPlaying">Select a channel to start watching</div>
+      <button class="fullscreen-btn" id="fsBtn" title="Fullscreen">
+        <svg id="fsIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+        </svg>
+      </button>
     </div>
   </div>
 </div>
@@ -898,6 +941,63 @@ searchInput.addEventListener("input", applyFilters);
 function escapeHTML(str) {
   return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
+
+/* ── Custom Fullscreen (TV + all browsers) ── */
+const fsBtn      = document.getElementById("fsBtn");
+const fsIcon     = document.getElementById("fsIcon");
+const playerCard = document.querySelector(".player-card");
+
+const expandIcon   = `<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>`;
+const collapseIcon = `<path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 0 2-2h3M3 16h3a2 2 0 0 0 2 2v3"/>`;
+
+fsBtn.addEventListener("click", () => {
+  const isFs = playerCard.classList.toggle("fullscreen-mode");
+  fsIcon.innerHTML = isFs ? collapseIcon : expandIcon;
+  document.body.style.overflow = isFs ? "hidden" : "";
+
+  // Also try native fullscreen (works on desktop/mobile browsers)
+  if (isFs) {
+    if (video.requestFullscreen)            video.requestFullscreen().catch(()=>{});
+    else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
+    else if (video.webkitEnterFullscreen)   video.webkitEnterFullscreen();  // iOS
+    else if (video.mozRequestFullScreen)    video.mozRequestFullScreen();
+    else if (video.msRequestFullscreen)     video.msRequestFullscreen();
+  } else {
+    if (document.exitFullscreen)            document.exitFullscreen().catch(()=>{});
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    else if (document.mozCancelFullScreen)  document.mozCancelFullScreen();
+    else if (document.msExitFullscreen)     document.msExitFullscreen();
+  }
+});
+
+// Sync CSS class if native fullscreen exits via Esc or browser button
+document.addEventListener("fullscreenchange",       syncFsState);
+document.addEventListener("webkitfullscreenchange", syncFsState);
+document.addEventListener("mozfullscreenchange",    syncFsState);
+document.addEventListener("MSFullscreenChange",     syncFsState);
+
+function syncFsState() {
+  const nativeFs = !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement
+  );
+  if (!nativeFs) {
+    playerCard.classList.remove("fullscreen-mode");
+    fsIcon.innerHTML = expandIcon;
+    document.body.style.overflow = "";
+  }
+}
+
+// Escape key exits CSS fullscreen (for TV remotes / keyboards)
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && playerCard.classList.contains("fullscreen-mode")) {
+    playerCard.classList.remove("fullscreen-mode");
+    fsIcon.innerHTML = expandIcon;
+    document.body.style.overflow = "";
+  }
+});
 </script>
 </body>
 </html>
