@@ -734,7 +734,11 @@ video:-webkit-full-screen { width:100vw; height:100vh; object-fit:contain; borde
 </nav>
 
 <script>
-const PLAYLIST_URL = "https://raw.githubusercontent.com/NORRIS63/NorrisTV/main/playlist.m3u";
+const PLAYLIST_URLS = [
+  "https://raw.githubusercontent.com/NORRIS63/NorrisTV/main/playlist.m3u",
+  "https://iptv-org.github.io/iptv/regions/asia.m3u"
+];
+
 const video        = document.getElementById("video");
 const nowPlaying   = document.getElementById("nowPlaying");
 const liveBadge    = document.getElementById("liveBadge");
@@ -744,39 +748,54 @@ const catFilters   = document.getElementById("categoryFilters");
 const channelCount = document.getElementById("channelCount");
 const splash       = document.getElementById("splash");
 
-let channels     = [];
-let activeGroup  = "all";
+let channels    = [];
+let activeGroup = "all";
 
 /* ── Splash ── */
 window.addEventListener("load", () => {
   setTimeout(() => splash.classList.add("hide"), 1400);
 });
 
-/* ── Playlist fetch ── */
-fetch(PLAYLIST_URL)
-  .then(r => {
-    if (!r.ok) throw new Error("Playlist fetch failed");
-    return r.text();
-  })
-  .then(data => {
-    if (!data.includes("#EXTM3U") && !data.includes("#EXTINF")) {
-      throw new Error("Invalid M3U content");
+/* ── Playlist fetch (parallel, merge all) ── */
+Promise.all(
+  PLAYLIST_URLS.map(url =>
+    fetch(url)
+      .then(r => r.ok ? r.text() : "")
+      .catch(() => "")
+  )
+)
+.then(results => {
+  results.forEach(data => {
+    if (data.includes("#EXTINF")) {
+      channels.push(...parseM3U(data));
     }
-    channels = parseM3U(data);
-    channelCount.innerHTML = channels.length + '<span>+</span>';
-    buildCategoryFilters();
-    renderChannels(channels);
-  })
-  .catch(err => {
-    console.error("Playlist error:", err);
+  });
+
+  if (!channels.length) {
     categoriesDiv.innerHTML = `
       <div class="empty-state">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/>
         </svg>
-        <p>Couldn't load channels. Check your playlist URL.</p>
+        <p>Couldn't load channels. Check your playlist URLs.</p>
       </div>`;
-  });
+    return;
+  }
+
+  channelCount.innerHTML = channels.length + '<span>+</span>';
+  buildCategoryFilters();
+  renderChannels(channels);
+})
+.catch(err => {
+  console.error("Playlist error:", err);
+  categoriesDiv.innerHTML = `
+    <div class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/>
+      </svg>
+      <p>Couldn't load channels. Check your playlist URLs.</p>
+    </div>`;
+});
 
 /* ── Parse M3U ── */
 function parseM3U(data) {
